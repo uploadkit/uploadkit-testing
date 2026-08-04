@@ -1,0 +1,68 @@
+services:
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+  minio_init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      i=0;
+      until mc alias set local http://minio:9000 minioadmin minioadmin; do
+        i=$$((i+1));
+        if [ $$i -gt 60 ]; then exit 1; fi;
+        sleep 1;
+      done;
+      mc mb --ignore-existing local/uploads;
+      exit 0
+      "
+
+  api:
+    build:
+      context: ../..
+      dockerfile: uploadkit-testing/perf/Dockerfile.api
+    depends_on:
+      minio_init:
+        condition: service_completed_successfully
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      UPLOAD_BUCKET: uploads
+      UPLOAD_MAX_SIZE: "115343360"
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+  bench:
+    profiles: ["bench"]
+    build:
+      context: ../..
+      dockerfile: uploadkit-testing/perf/Dockerfile.bench
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_BASE: http://api:8000
+      ARTIFACTS_DIR: /artifacts
+      HEY_N_PNG: ${HEY_N_PNG:-50}
+      HEY_C_PNG: ${HEY_C_PNG:-5}
+      HEY_N_PDF: ${HEY_N_PDF:-10}
+      HEY_C_PDF: ${HEY_C_PDF:-2}
+      PAYLOAD: ${PAYLOAD:-both}
+      UPLOAD_ENDPOINT: ${UPLOAD_ENDPOINT:-both}
+    volumes:
+      - ./artifacts:/artifacts
+      - ./scripts:/perf/scripts:ro

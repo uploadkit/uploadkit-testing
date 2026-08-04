@@ -50,6 +50,10 @@ Thin test doubles that satisfy UploadKit Core protocols. No production code path
 | `MemoryUploadFile` / `make_upload_file` | Public |
 | `assert_raises_uploader_error` / `assert_upload_fails` | Public |
 
+## Performance
+
+Docker Compose harness for FastAPI upload performance (MinIO + curl/hey) lives in [`perf/`](perf/). See [`perf/README.md`](perf/README.md).
+
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md).

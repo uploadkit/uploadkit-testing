@@ -1,0 +1,25 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY uploadkit /deps/uploadkit
+COPY uploadkit-fastapi /deps/uploadkit-fastapi
+COPY uploadkit-security /deps/uploadkit-security
+COPY uploadkit-testing/perf/requirements.txt /app/requirements.txt
+
+RUN pip install --no-cache-dir \
+    /deps/uploadkit \
+    /deps/uploadkit-fastapi \
+    /deps/uploadkit-security \
+    -r /app/requirements.txt
+
+COPY uploadkit-testing/perf/app /app/app
+
+ENV PYTHONUNBUFFERED=1
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -9,3 +9,7 @@ build/
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+
+# Perf harness outputs (payloads, multipart bodies, curl/hey reports)
+perf/artifacts/*
+!perf/artifacts/.gitkeep
