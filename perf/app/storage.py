@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import os
+
 import aioboto3
 import boto3
 from botocore.client import Config
 
-_PART_SIZE = 5 * 1024 * 1024  # 5 MiB
+DEFAULT_PART_SIZE = 5 * 1024 * 1024  # 5 MiB (S3 minimum except last part)
 
 
 def _client_config() -> Config:
@@ -46,11 +48,22 @@ class Boto3S3Storage:
 
 
 class AsyncS3Writer:
-    def __init__(self, client, *, bucket: str, object_name: str, content_type: str) -> None:
+    def __init__(
+        self,
+        client,
+        *,
+        bucket: str,
+        object_name: str,
+        content_type: str,
+        part_size: int,
+    ) -> None:
+        if part_size <= 0:
+            raise ValueError("part_size must be positive")
         self._client = client
         self._bucket = bucket
         self._key = object_name
         self._content_type = content_type
+        self._part_size = part_size
         self._upload_id: str | None = None
         self._parts: list[dict] = []
         self._buffer = bytearray()
@@ -81,9 +94,9 @@ class AsyncS3Writer:
 
     async def write(self, chunk: bytes) -> None:
         self._buffer.extend(chunk)
-        while len(self._buffer) >= _PART_SIZE:
-            part = bytes(self._buffer[:_PART_SIZE])
-            del self._buffer[:_PART_SIZE]
+        while len(self._buffer) >= self._part_size:
+            part = bytes(self._buffer[: self._part_size])
+            del self._buffer[: self._part_size]
             await self._flush_part(part)
 
     async def abort(self) -> None:
@@ -128,6 +141,7 @@ class AsyncS3Storage:
         secret_key: str,
         region: str = "us-east-1",
         endpoint_url: str | None = None,
+        part_size: int | None = None,
     ) -> None:
         self._session = aioboto3.Session()
         self._client_kwargs: dict = {
@@ -139,6 +153,9 @@ class AsyncS3Storage:
         }
         if endpoint_url:
             self._client_kwargs["endpoint_url"] = endpoint_url
+        if part_size is None:
+            part_size = int(os.environ.get("S3_PART_SIZE", str(DEFAULT_PART_SIZE)))
+        self._part_size = part_size
         self._cm = None
         self._client = None
 
@@ -155,4 +172,5 @@ class AsyncS3Storage:
             bucket=bucket,
             object_name=object_name,
             content_type=content_type,
+            part_size=self._part_size,
         )

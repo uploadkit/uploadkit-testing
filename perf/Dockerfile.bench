@@ -1,19 +1,15 @@
-FROM golang:1.22-bookworm AS heybuild
-RUN go install github.com/rakyll/hey@v0.1.4
+FROM grafana/k6:0.54.0
 
-FROM debian:bookworm-slim
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY --from=heybuild /go/bin/hey /usr/local/bin/hey
+USER root
+RUN apk add --no-cache curl bash || true
+USER k6
 
 WORKDIR /perf
 COPY uploadkit-testing/perf/scripts /perf/scripts
-RUN chmod +x /perf/scripts/*.sh
+COPY uploadkit-testing/perf/k6 /perf/k6
 
 ENV API_BASE=http://api:8000
 ENV ARTIFACTS_DIR=/artifacts
 
-CMD ["./scripts/smoke_curl.sh"]
+ENTRYPOINT []
+CMD ["./scripts/load_k6.sh"]

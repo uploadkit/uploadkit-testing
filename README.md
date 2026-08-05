@@ -52,7 +52,10 @@ Thin test doubles that satisfy UploadKit Core protocols. No production code path
 
 ## Performance
 
-Docker Compose harness for FastAPI upload performance (MinIO + curl/hey) lives in [`perf/`](perf/). See [`perf/README.md`](perf/README.md).
+Docker Compose harness for FastAPI upload performance (MinIO + curl smoke + k6 load) lives in [`perf/`](perf/).
+
+- How to run: [`perf/README.md`](perf/README.md)
+- Choosing chunk / part size and workers: [`perf/CHUNK_SIZE_GUIDE.md`](perf/CHUNK_SIZE_GUIDE.md)
 
 ## Changelog
 

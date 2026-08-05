@@ -1,6 +1,6 @@
 services:
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minioadmin
@@ -8,21 +8,27 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
 
   minio_init:
-    image: minio/mc:latest
+    image: quay.io/minio/mc:latest
     depends_on:
-      - minio
+      minio:
+        condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      i=0;
-      until mc alias set local http://minio:9000 minioadmin minioadmin; do
-        i=$$((i+1));
-        if [ $$i -gt 60 ]; then exit 1; fi;
-        sleep 1;
-      done;
+      set -e;
+      mc alias set local http://minio:9000 minioadmin minioadmin;
       mc mb --ignore-existing local/uploads;
-      exit 0
+      mc anonymous set none local/uploads;
+      mc ls local/uploads;
+      echo minio_ready;
       "
 
   api:
@@ -30,6 +36,8 @@ services:
       context: ../..
       dockerfile: uploadkit-testing/perf/Dockerfile.api
     depends_on:
+      minio:
+        condition: service_healthy
       minio_init:
         condition: service_completed_successfully
     environment:
@@ -38,6 +46,10 @@ services:
       MINIO_ROOT_PASSWORD: minioadmin
       UPLOAD_BUCKET: uploads
       UPLOAD_MAX_SIZE: "115343360"
+      ASYNC_CHUNK_SIZE: "8388608"
+      S3_PART_SIZE: ${S3_PART_SIZE:-5242880}
+      ENABLE_CHECKSUM: ${ENABLE_CHECKSUM:-0}
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-4}
     ports:
       - "8000:8000"
     healthcheck:
@@ -45,6 +57,7 @@ services:
       interval: 3s
       timeout: 5s
       retries: 30
+    restart: unless-stopped
 
   bench:
     profiles: ["bench"]
@@ -57,12 +70,13 @@ services:
     environment:
       API_BASE: http://api:8000
       ARTIFACTS_DIR: /artifacts
-      HEY_N_PNG: ${HEY_N_PNG:-50}
-      HEY_C_PNG: ${HEY_C_PNG:-5}
-      HEY_N_PDF: ${HEY_N_PDF:-10}
-      HEY_C_PDF: ${HEY_C_PDF:-2}
+      K6_VUS_PNG: ${K6_VUS_PNG:-4}
+      K6_ITER_PNG: ${K6_ITER_PNG:-20}
+      K6_VUS_PDF: ${K6_VUS_PDF:-2}
+      K6_ITER_PDF: ${K6_ITER_PDF:-5}
       PAYLOAD: ${PAYLOAD:-both}
       UPLOAD_ENDPOINT: ${UPLOAD_ENDPOINT:-both}
     volumes:
       - ./artifacts:/artifacts
       - ./scripts:/perf/scripts:ro
+      - ./k6:/perf/k6:ro
