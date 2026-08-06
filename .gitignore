@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 venvtmp/
 pydeps/
+.github_token
 dist/
 build/
 *.egg-info/
